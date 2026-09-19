@@ -1,2 +1,20 @@
 services:
-  
+  db:
+    image: postgres:18-alpine
+    container_name: splitly-db
+    environment:
+      POSTGRES_DB: splitly
+      POSTGRES_USER: splitly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - splitly-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitly -d splitly"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  splitly-pgdata:

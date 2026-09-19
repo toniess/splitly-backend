@@ -1,0 +1,19 @@
+spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+  application:
+    name: splitly
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
