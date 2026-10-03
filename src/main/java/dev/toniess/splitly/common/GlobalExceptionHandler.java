@@ -1,10 +1,11 @@
 package dev.toniess.splitly.common;
 
 import dev.toniess.splitly.common.dto.ValidationError;
-import dev.toniess.splitly.common.exception.ConflictException;
-import dev.toniess.splitly.common.exception.NotFoundException;
+import dev.toniess.splitly.common.exception.*;
+import dev.toniess.splitly.expense.exception.ExpenseVersionConflictException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
@@ -44,6 +45,27 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(BadRequestException.class)
+    public ProblemDetail handleBadRequest(BadRequestException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Некорректный запрос", ex.getMessage(), "bad-request");
+    }
+
+
+    @ExceptionHandler(UnprocessableException.class)
+    public ProblemDetail handleUnprocessable(UnprocessableException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Нарушение бизнес-правила", ex.getMessage(), "unprocessable");
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ProblemDetail handleForbidden(ForbiddenException ex) {
+        return problem(HttpStatus.FORBIDDEN, "Недостаточно прав для этого действия", ex.getMessage(), "forbidden");
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail rethrowOptimisticLockingAsConflict(OptimisticLockingFailureException ex) {
+        return problem(HttpStatus.CONFLICT, "Конфликт состояния", "...", "conflict");
+    }
+
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception ex) {
         ProblemDetail problem = problem(HttpStatus.INTERNAL_SERVER_ERROR, "Внутренняя ошибка",
@@ -53,6 +75,7 @@ public class GlobalExceptionHandler {
         }
         return problem;
     }
+
 
     private ProblemDetail problem(HttpStatusCode status, String title, String detail, String type) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);

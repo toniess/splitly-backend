@@ -1,6 +1,7 @@
 package dev.toniess.splitly.expense.split;
 
 import dev.toniess.splitly.expense.entity.SplitType;
+import dev.toniess.splitly.expense.exception.SharesDoNotMatchAmountException;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -40,7 +41,7 @@ public class ExactSplitStrategy implements SplitStrategy {
 
         final BigDecimal sum = splitted.stream().map(ShareAmount::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (amount.compareTo(sum) != 0) {
-            throw new IllegalArgumentException(
+            throw new SharesDoNotMatchAmountException(
                     "Sum of shares is " + sum + ", but expense amount is " + amount);
         }
 

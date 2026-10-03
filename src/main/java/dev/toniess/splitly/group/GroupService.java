@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 
@@ -37,13 +36,12 @@ public class GroupService {
 
     @Transactional
     public GroupResponse createGroup(UUID actorId, String name, String currency) {
-        final Optional<User> user = userRepository.findById(actorId);
-        if (user.isEmpty()) throw new UserNotFoundException(actorId);
+        final User user = userRepository.findById(actorId).orElseThrow(() -> new UserNotFoundException(actorId));
 
-        final Group group = new Group(name, currency, user.get(), inviteCodeGenerator.generate());
+        final Group group = new Group(name, currency, user, inviteCodeGenerator.generate());
         groupRepository.saveAndFlush(group);
 
-        final GroupMember groupMember = new GroupMember(group, GroupRole.OWNER, user.get());
+        final GroupMember groupMember = new GroupMember(group, GroupRole.OWNER, user);
         groupMemberRepository.saveAndFlush(groupMember);
 
         return GroupResponse.from(group);
@@ -59,18 +57,20 @@ public class GroupService {
 
     @Transactional(readOnly = true)
     public GroupResponse getGroup(UUID actorId, UUID groupId) {
-        final boolean userIsInGroup = groupMemberRepository.existsGroupMemberByUserIdAndGroupId(actorId, groupId);
-        if (!userIsInGroup) throw GroupNotFoundException.byId(groupId);
-        final Optional<Group> group = groupRepository.findById(groupId);
-        if (group.isEmpty()) throw GroupNotFoundException.byId(groupId);
+        if (!groupMemberRepository.existsGroupMemberByUserIdAndGroupId(actorId, groupId)) {
+            throw GroupNotFoundException.byId(groupId);
+        }
 
-        return GroupResponse.from(group.get());
+        final Group group = groupRepository.findById(groupId).orElseThrow(() -> GroupNotFoundException.byId(groupId));
+
+        return GroupResponse.from(group);
     }
 
     @Transactional(readOnly = true)
     public List<GroupMemberResponse> getMembers(UUID actorId, UUID groupId) {
-        final boolean userIsInGroup = groupMemberRepository.existsGroupMemberByUserIdAndGroupId(actorId, groupId);
-        if (!userIsInGroup) throw GroupNotFoundException.byId(groupId);
+        if (!groupMemberRepository.existsGroupMemberByUserIdAndGroupId(actorId, groupId)) {
+            throw GroupNotFoundException.byId(groupId);
+        }
         return groupMemberRepository.findAllByGroupId(groupId)
                 .stream()
                 .map(GroupMemberResponse::from)
@@ -79,14 +79,14 @@ public class GroupService {
 
     @Transactional
     public GroupMemberResponse joinByInviteCode(UUID actorId, String inviteCode) {
-        final Optional<Group> group = groupRepository.findByInviteCode(inviteCode);
-        if (group.isEmpty()) throw GroupNotFoundException.byInviteCode(inviteCode);
-        final boolean userIsInGroup = groupMemberRepository.existsGroupMemberByUserIdAndGroupId(actorId, group.get().getId());
-        if (userIsInGroup) throw new AlreadyMemberException(actorId, group.get().getId());
+        final Group group = groupRepository.findByInviteCode(inviteCode)
+                .orElseThrow(() -> GroupNotFoundException.byInviteCode(inviteCode));
+        if (groupMemberRepository.existsGroupMemberByUserIdAndGroupId(actorId, group.getId())) {
+            throw new AlreadyMemberException(actorId, group.getId());
+        }
 
-        final Optional<User> user = userRepository.findById(actorId);
-        if (user.isEmpty()) throw new UserNotFoundException(actorId);
-        final GroupMember newMember = new GroupMember(group.get(), GroupRole.MEMBER, user.get());
+        final User user = userRepository.findById(actorId).orElseThrow(() -> new UserNotFoundException(actorId));
+        final GroupMember newMember = new GroupMember(group, GroupRole.MEMBER, user);
         groupMemberRepository.saveAndFlush(newMember);
         return GroupMemberResponse.from(newMember);
     }

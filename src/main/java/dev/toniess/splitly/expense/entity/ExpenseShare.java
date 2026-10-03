@@ -26,4 +26,24 @@ public class ExpenseShare {
     private BigDecimal amount;
 
     protected ExpenseShare() {}
+
+    public ExpenseShare(
+            User user,
+            BigDecimal amount
+    ) {
+        this.user = user;
+        this.amount = amount;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setExpense(Expense expense) {
+        this.expense = expense;
+    }
 }

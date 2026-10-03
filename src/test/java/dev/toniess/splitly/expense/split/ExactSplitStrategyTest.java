@@ -1,5 +1,6 @@
 package dev.toniess.splitly.expense.split;
 
+import dev.toniess.splitly.expense.exception.SharesDoNotMatchAmountException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +38,7 @@ class ExactSplitStrategyTest {
     void rejectsSumSmallerThanAmountByOneCent() {
         assertThatThrownBy(() -> strategy.split(
                 new BigDecimal("4500.00"), amounts("1500.00", "1500.00", "1499.99")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SharesDoNotMatchAmountException.class);
     }
 
     @Test
@@ -45,7 +46,7 @@ class ExactSplitStrategyTest {
     void rejectsSumGreaterThanAmount() {
         assertThatThrownBy(() -> strategy.split(
                 new BigDecimal("4500.00"), amounts("2000.00", "1500.00", "1500.00")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SharesDoNotMatchAmountException.class);
     }
 
     @Test
