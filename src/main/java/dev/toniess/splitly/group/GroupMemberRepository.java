@@ -3,10 +3,12 @@ package dev.toniess.splitly.group;
 import dev.toniess.splitly.group.entity.Group;
 import dev.toniess.splitly.group.entity.GroupMember;
 import dev.toniess.splitly.group.entity.GroupRole;
+import dev.toniess.splitly.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,6 +23,6 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, UUID> 
 
     boolean existsByUserIdAndGroupIdAndRole(UUID userId, UUID groupId, GroupRole role);
 
-    UUID group(Group group);
+    Optional<GroupMember> findByUserIdAndGroupId(UUID userId, UUID groupId);
 }
 

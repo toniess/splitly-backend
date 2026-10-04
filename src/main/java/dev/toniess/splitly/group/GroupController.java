@@ -49,6 +49,15 @@ public class GroupController {
         return groupService.getMembers(actorId, id);
     }
 
+    @DeleteMapping("{id}/members/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMe(
+            @RequestHeader("X-User-Id") UUID actorId,
+            @PathVariable UUID id
+    ) {
+        groupService.deleteMember(actorId, id);
+    }
+
     @PostMapping("join")
     public GroupMemberResponse joinGroup(
             @RequestHeader("X-User-Id") UUID actorId,

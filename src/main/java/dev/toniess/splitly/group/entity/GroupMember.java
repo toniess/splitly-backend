@@ -42,6 +42,7 @@ public class GroupMember {
     public Group getGroup() { return group; }
 
     public GroupRole getRole() { return role; }
+    public void setRole(GroupRole role) { this.role = role; }
 
     public Instant getJoinedAt() { return joinedAt; }
 
