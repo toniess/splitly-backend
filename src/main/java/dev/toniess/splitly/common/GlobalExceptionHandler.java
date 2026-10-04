@@ -9,7 +9,10 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -51,6 +54,39 @@ public class GlobalExceptionHandler {
     }
 
 
+    /**
+     * Путь или параметр запроса не приводится к нужному типу: {@code /expenses/123} вместо UUID,
+     * {@code ?limit=abc} вместо числа. Ошибка клиента, а не сбой сервера.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String expectedType = ex.getRequiredType() == null ? "другой тип" : ex.getRequiredType().getSimpleName();
+
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "Некорректный запрос",
+                "Значение параметра '%s' не соответствует типу %s".formatted(ex.getName(), expectedType),
+                "bad-request");
+        problem.setProperty("errors",
+                List.of(new ValidationError(ex.getName(), "ожидался " + expectedType)));
+        return problem;
+    }
+
+    /** Тело запроса не разобралось: битый JSON, не тот формат числа или даты. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Некорректный запрос",
+                "Тело запроса не удалось разобрать", "bad-request");
+    }
+
+    /** Не передан обязательный заголовок — например, {@code X-User-Id}. */
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ProblemDetail handleMissingHeader(MissingRequestHeaderException ex) {
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "Некорректный запрос",
+                "Не передан обязательный заголовок '%s'".formatted(ex.getHeaderName()), "bad-request");
+        problem.setProperty("errors",
+                List.of(new ValidationError(ex.getHeaderName(), "заголовок обязателен")));
+        return problem;
+    }
+
     @ExceptionHandler(UnprocessableException.class)
     public ProblemDetail handleUnprocessable(UnprocessableException ex) {
         return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Нарушение бизнес-правила", ex.getMessage(), "unprocessable");
@@ -62,8 +98,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ProblemDetail rethrowOptimisticLockingAsConflict(OptimisticLockingFailureException ex) {
-        return problem(HttpStatus.CONFLICT, "Конфликт состояния", "...", "conflict");
+    public ProblemDetail handleOptimisticLocking(OptimisticLockingFailureException ex) {
+        return problem(HttpStatus.CONFLICT, "Конфликт состояния",
+                "Объект изменился, пока вы с ним работали. Перечитайте его и повторите.", "conflict");
     }
 
     @ExceptionHandler(Exception.class)
