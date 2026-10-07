@@ -7,6 +7,7 @@ import dev.toniess.splitly.settlement.dto.TransferPlanResponse;
 import dev.toniess.splitly.settlement.entity.Settlement;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -23,7 +24,7 @@ public class SettlementController {
     @GetMapping("/balances")
     @ResponseStatus(HttpStatus.OK)
     public BalancesResponse getBalances(
-            @RequestHeader("X-User-Id") UUID actorId,
+            @AuthenticationPrincipal UUID actorId,
             @PathVariable UUID groupId
     ) {
         return settlementService.getBalances(actorId, groupId);
@@ -33,7 +34,7 @@ public class SettlementController {
     @GetMapping("/settlement-plan")
     @ResponseStatus(HttpStatus.OK)
     public TransferPlanResponse getTransferPlan(
-            @RequestHeader("X-User-Id") UUID actorId,
+            @AuthenticationPrincipal UUID actorId,
             @PathVariable UUID groupId
     ) {
         return settlementService.plan(actorId, groupId);
@@ -42,7 +43,7 @@ public class SettlementController {
     @PostMapping("/settlements")
     @ResponseStatus(HttpStatus.CREATED)
     public SettlementResponse createSettlement(
-            @RequestHeader("X-User-Id") UUID actorId,
+            @AuthenticationPrincipal UUID actorId,
             @PathVariable UUID groupId,
             @RequestBody @Valid CreateSettlementRequest request
     ) {
