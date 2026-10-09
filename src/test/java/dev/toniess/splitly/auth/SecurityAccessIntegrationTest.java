@@ -1,13 +1,12 @@
 package dev.toniess.splitly.auth;
 
+import dev.toniess.splitly.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.JsonNode;
@@ -28,10 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Тесты идут через настоящую цепочку фильтров Spring Security, поэтому проверяют
  * именно то поведение, которое увидит клиент.
  */
-@SpringBootTest
+
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
-class SecurityAccessIntegrationTest {
+class SecurityAccessIntegrationTest extends IntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;

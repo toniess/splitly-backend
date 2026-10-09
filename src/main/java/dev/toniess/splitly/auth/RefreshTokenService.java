@@ -2,6 +2,7 @@ package dev.toniess.splitly.auth;
 
 import dev.toniess.splitly.auth.dto.TokenPairResponse;
 import dev.toniess.splitly.auth.entity.RefreshToken;
+import dev.toniess.splitly.common.Hash;
 import dev.toniess.splitly.common.RefreshTokenGenerator;
 import dev.toniess.splitly.config.JwtProperties;
 import dev.toniess.splitly.user.entity.User;
@@ -61,12 +62,6 @@ public class RefreshTokenService {
     }
 
     private String sha256(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 обязан поддерживаться любой JVM", e);
-        }
+        return HexFormat.of().formatHex(Hash.sha256(value));
     }
 }

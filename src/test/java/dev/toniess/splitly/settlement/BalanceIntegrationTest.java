@@ -1,5 +1,6 @@
 package dev.toniess.splitly.settlement;
 
+import dev.toniess.splitly.IntegrationTest;
 import dev.toniess.splitly.expense.ExpenseRepository;
 import dev.toniess.splitly.expense.ExpenseService;
 import dev.toniess.splitly.expense.dto.CreateExpenseRequest;
@@ -20,8 +21,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -39,10 +38,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Каждый тест идёт в своей транзакции и откатывается — база остаётся нетронутой.
  */
-@SpringBootTest
-@ActiveProfiles("test")
+
 @Transactional
-class BalanceIntegrationTest {
+class BalanceIntegrationTest extends IntegrationTest {
 
     @Autowired SettlementService settlementService;
     @Autowired ExpenseService expenseService;

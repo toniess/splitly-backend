@@ -1,8 +1,10 @@
 package dev.toniess.splitly.expense;
 
 import dev.toniess.splitly.expense.entity.Expense;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.Instant;
@@ -31,5 +33,8 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
         """, nativeQuery = true)
     List<Expense> findPage(UUID groupId, int limit, Instant cursorSpentAt, UUID cursorId);
 
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Expense> findForUpdateByIdAndDeletedAtIsNull(UUID id);
 
 }

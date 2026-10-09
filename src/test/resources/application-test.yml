@@ -1,5 +1,5 @@
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/splitly
-    username: splitly
-    password: ${POSTGRES_PASSWORD}
+  jpa:
+    properties:
+      hibernate:
+        generate_statistics: true

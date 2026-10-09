@@ -1,12 +1,14 @@
 package dev.toniess.splitly.expense;
 
+import dev.toniess.splitly.common.idempotency.IdempotencyService;
 import dev.toniess.splitly.expense.dto.CreateExpenseRequest;
 import dev.toniess.splitly.expense.dto.ExpenseFeedPage;
 import dev.toniess.splitly.expense.dto.ExpenseResponse;
 import dev.toniess.splitly.expense.dto.UpdateExpenseRequest;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import org.springframework.boot.context.properties.bind.DefaultValue;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.RequestBody;
 import jakarta.validation.Valid;
@@ -19,20 +21,34 @@ import java.util.UUID;
 @RequestMapping("/api/v1")
 public class ExpenseController {
     private final ExpenseService expenseService;
+    private final IdempotencyService idempotencyService;
 
-    public ExpenseController(ExpenseService expenseService) {
+    public ExpenseController(ExpenseService expenseService, IdempotencyService idempotencyService) {
         this.expenseService = expenseService;
+        this.idempotencyService = idempotencyService;
     }
+
 
     @PostMapping("/groups/{groupId}/expenses")
     @ResponseStatus(HttpStatus.CREATED)
     public ExpenseResponse createExpense(
             @AuthenticationPrincipal UUID actorId,
             @PathVariable UUID groupId,
+            @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 256) String idempotencyKey,
             @RequestBody @Valid CreateExpenseRequest createExpenseRequest
     ) {
-        return expenseService.create(actorId, groupId, createExpenseRequest);
+        return idempotencyService.execute(
+                actorId,
+                idempotencyKey,
+                "POST /groups/" + groupId + "/expenses",
+                createExpenseRequest,
+                HttpStatus.CREATED.value(),
+                ExpenseResponse.class,
+                () -> expenseService.create(actorId, groupId, createExpenseRequest)
+        );
     }
+
+
 
     @GetMapping("/expenses/{expenseId}")
     @ResponseStatus(HttpStatus.OK)

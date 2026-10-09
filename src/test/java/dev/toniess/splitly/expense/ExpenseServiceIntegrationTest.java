@@ -1,5 +1,6 @@
 package dev.toniess.splitly.expense;
 
+import dev.toniess.splitly.IntegrationTest;
 import dev.toniess.splitly.expense.dto.CreateExpenseRequest;
 import dev.toniess.splitly.expense.dto.ExpenseFeedPage;
 import dev.toniess.splitly.expense.dto.ExpenseResponse;
@@ -23,8 +24,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -44,10 +43,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>В итерации 6 локальную базу заменит Testcontainers, и зависимость от docker compose исчезнет.
  */
-@SpringBootTest
-@ActiveProfiles("test")
+
 @Transactional
-class ExpenseServiceIntegrationTest {
+class ExpenseServiceIntegrationTest extends IntegrationTest {
 
     @Autowired ExpenseService expenseService;
     @Autowired ExpenseRepository expenseRepository;

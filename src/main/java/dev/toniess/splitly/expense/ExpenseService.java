@@ -104,7 +104,7 @@ public class ExpenseService {
 
     @Transactional
     public ExpenseResponse update(UUID actorId, UUID expenseId, UpdateExpenseRequest request) {
-        final Expense expense = expenseRepository.findByIdAndDeletedAtIsNull(expenseId)
+        final Expense expense = expenseRepository.findForUpdateByIdAndDeletedAtIsNull(expenseId)
                 .orElseThrow(() -> new ExpenseNotFoundException(expenseId));
 
         requireMemberOrNotFound(actorId, expense.getGroup().getId(), expenseId);

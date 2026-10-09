@@ -96,6 +96,6 @@ class JwtServiceTest {
      */
     private static JwtService jwtService(String secret, Duration accessTtl) {
         JwtProperties properties = new JwtProperties(secret, accessTtl, Duration.ofDays(30));
-        return new JwtService(properties, properties);
+        return new JwtService(properties);
     }
 }

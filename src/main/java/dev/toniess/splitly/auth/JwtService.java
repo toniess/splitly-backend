@@ -13,7 +13,6 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.UUID;
 
@@ -22,8 +21,8 @@ public class JwtService {
     private final Duration accessTtl;
     private final SecretKey key;
 
-    public JwtService(JwtProperties properties, JwtProperties jwtProperties) {
-        this.accessTtl = jwtProperties.accessTtl();
+    public JwtService(JwtProperties properties) {
+        this.accessTtl = properties.accessTtl();
         this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
     }
 

@@ -1,5 +1,6 @@
 package dev.toniess.splitly.group;
 
+import dev.toniess.splitly.IntegrationTest;
 import dev.toniess.splitly.expense.ExpenseRepository;
 import dev.toniess.splitly.expense.ExpenseService;
 import dev.toniess.splitly.expense.dto.CreateExpenseRequest;
@@ -17,8 +18,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -33,10 +32,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Выход из группы: проверка сальдо, передача владения, видимость после ухода.
  */
-@SpringBootTest
-@ActiveProfiles("test")
+
 @Transactional
-class LeaveGroupIntegrationTest {
+class LeaveGroupIntegrationTest extends IntegrationTest {
 
     @Autowired GroupService groupService;
     @Autowired SettlementService settlementService;

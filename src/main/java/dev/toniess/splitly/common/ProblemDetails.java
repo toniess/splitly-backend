@@ -1,5 +1,6 @@
 package dev.toniess.splitly.common;
 
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
@@ -16,7 +17,11 @@ public class ProblemDetails {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setTitle(title);
         problem.setType(URI.create(TYPE_PREFIX + type));
-        problem.setProperty("traceId", UUID.randomUUID().toString());
+        String traceId = MDC.get(RequestIdFilter.TRACE_ID);
+        if (traceId == null || traceId.isBlank()) {
+            traceId = UUID.randomUUID().toString();
+        }
+        problem.setProperty(RequestIdFilter.TRACE_ID, traceId);
         return problem;
     }
 }

@@ -16,5 +16,25 @@ services:
       timeout: 3s
       retries: 5
 
+  app:
+    build: .
+    container_name: splitly-app
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # внутри сети compose база доступна по имени сервиса, а не по localhost:
+      # localhost в контейнере указывает на сам контейнер
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/splitly
+      SPRING_DATASOURCE_USERNAME: splitly
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8080:8080"
+    # без условия service_healthy приложение стартует раньше базы
+    # и падает на миграциях
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   splitly-pgdata:

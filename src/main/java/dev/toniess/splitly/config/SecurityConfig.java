@@ -32,7 +32,8 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter,
-            ProblemDetailAuthenticationEntryPoint problemDetailAuthenticationEntryPoint) throws Exception {
+            ProblemDetailAuthenticationEntryPoint problemDetailAuthenticationEntryPoint,
+            ProblemDetailAccessDeniedHandler problemDetailAccessDeniedHandler) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -47,7 +48,8 @@ public class SecurityConfig {
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
-                                .authenticationEntryPoint(problemDetailAuthenticationEntryPoint)
+                        .authenticationEntryPoint(problemDetailAuthenticationEntryPoint)
+                        .accessDeniedHandler(problemDetailAccessDeniedHandler)
                 )
                 .build();
     }
