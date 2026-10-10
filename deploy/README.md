@@ -27,15 +27,18 @@ jdbc:postgresql://ep-XXXX.REGION.neon.tech:5432/splitly?sslmode=require
 
 ## 2. Artifact Registry
 
-Создать приватный реестр, затем войти в него и отправить образ:
+Создать приватный реестр. При создании выдаются **Key ID** и **Key Secret** —
+Key Secret показывается один раз, сохрани сразу.
+
+Адрес реестра выглядит как `<имя-реестра>.cr.cloud.ru`.
+
+Образ собирается и отправляется автоматически при пуше в `main` — см. раздел
+«Автоматическая сборка». Вручную, если нужно:
 
 ```bash
-docker login <адрес-реестра>
-./deploy/build-and-push.sh <адрес-реестра>
+docker login <имя-реестра>.cr.cloud.ru -u <key_id> -p <key_secret>
+./deploy/build-and-push.sh <имя-реестра>.cr.cloud.ru
 ```
-
-Скрипт прогоняет тесты, собирает образ **под linux/amd64** и отправляет его
-с двумя тегами: по хешу коммита и `latest`.
 
 Платформа `--platform` не прощает: на Apple Silicon обычный `docker build`
 даёт arm64, и контейнер падает с `exec format error` без внятного объяснения.
@@ -107,14 +110,34 @@ curl -X POST https://api.toniess.dev/api/v1/auth/register \
   -d '{"email":"test@toniess.dev","password":"password123","displayName":"Тест"}'
 ```
 
+## Автоматическая сборка
+
+`.github/workflows/publish.yml` запускается при пуше в `main`: прогоняет тесты,
+собирает образ под `linux/amd64` и отправляет в реестр с двумя тегами —
+по короткому хешу коммита и `latest`.
+
+В настройках репозитория на GitHub нужно завести:
+
+| Где | Имя | Значение |
+| --- | --- | --- |
+| Secrets and variables → Actions → **Variables** | `CLOUDRU_REGISTRY` | `<имя-реестра>.cr.cloud.ru` |
+| Secrets and variables → Actions → **Secrets** | `CLOUDRU_KEY_ID` | Key ID реестра |
+| Secrets and variables → Actions → **Secrets** | `CLOUDRU_KEY_SECRET` | Key Secret реестра |
+
+Адрес реестра лежит в переменных, а не в секретах, намеренно: GitHub маскирует
+секреты во всём выводе, и в логах вместо тега образа было бы `***`.
+
+Если образ не собрался, отчёты тестов прикладываются к запуску артефактом
+`test-results`.
+
 ## Обновление
 
-```bash
-./deploy/build-and-push.sh <адрес-реестра>
-```
+Запушить в `main`. После успешной сборки создать в Container Apps новую ревизию
+с тегом по хешу коммита, а не `latest`: так видно, какая версия работает,
+и есть куда откатиться.
 
-Затем создать новую ревизию с новым тегом. Тег по хешу коммита, а не `latest`:
-так видно, какая версия работает, и есть куда откатиться.
+Создание ревизии пока вручную — автоматизировать его можно через API Cloud.ru,
+но это отдельная задача.
 
 ## Что осталось незакрытым
 

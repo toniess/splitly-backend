@@ -1,0 +1,97 @@
+name: Сборка и публикация образа
+
+on:
+  push:
+    branches: [main]
+  # Позволяет запустить выкладку вручную из вкладки Actions,
+  # не делая пустой коммит
+  workflow_dispatch:
+
+concurrency:
+  # Если пуши идут один за другим, незавершённую сборку предыдущего нет смысла
+  # доводить до конца — в реестр всё равно поедет последняя
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Gradle с кешем
+        uses: gradle/actions/setup-gradle@v4
+
+      # Testcontainers поднимает PostgreSQL в Docker — на ubuntu-latest он есть
+      # из коробки, ставить ничего не нужно
+      - name: Прогон тестов
+        run: ./gradlew test --no-daemon
+
+      - name: Отчёты о тестах
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/tests/test/
+          retention-days: 7
+
+  publish:
+    name: Образ в Artifact Registry
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Вход в реестр
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.CLOUDRU_REGISTRY }}
+          username: ${{ secrets.CLOUDRU_KEY_ID }}
+          password: ${{ secrets.CLOUDRU_KEY_SECRET }}
+
+      - name: Теги образа
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.CLOUDRU_REGISTRY }}/splitly
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest
+
+      - name: Сборка и отправка
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Облако запускает amd64. Без этой строки на раннере соберётся
+          # образ под архитектуру раннера, и на платформе он упадёт
+          # с exec format error
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Кеш слоёв между запусками: иначе Gradle качает зависимости заново
+          # при каждой сборке
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Итог
+        run: |
+          {
+            echo "### Образ опубликован"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo
+            echo "Создай ревизию в Container Apps с тегом по хешу коммита."
+          } >> "$GITHUB_STEP_SUMMARY"
