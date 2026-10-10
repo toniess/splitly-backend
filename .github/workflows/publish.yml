@@ -48,6 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # По умолчанию checkout берёт один коммит, и HEAD~1 не существует.
+          # Предыдущий коммит нужен, чтобы вычислить тег прошлого образа.
+          fetch-depth: 2
 
       - name: Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,6 +87,24 @@ jobs:
           # при каждой сборке
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Удаление старых образов
+        env:
+          REGISTRY_USERNAME: ${{ secrets.CLOUDRU_KEY_ID }}
+          REGISTRY_PASSWORD: ${{ secrets.CLOUDRU_KEY_SECRET }}
+        run: |
+          # Ровно семь символов от полного хеша: так же, как это делает
+          # metadata-action для тега type=sha. git rev-parse --short при
+          # коллизии вернул бы больше, и тег не совпал бы.
+          current="sha-${GITHUB_SHA:0:7}"
+
+          previous_full="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          previous="sha-${previous_full:0:7}"
+
+          echo "оставляем: $current, ${previous}, latest"
+          ./deploy/prune-registry.sh \
+              "${{ vars.CLOUDRU_REGISTRY }}" splitly \
+              "$current" "$previous" latest
 
       - name: Итог
         run: |
