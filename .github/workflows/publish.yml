@@ -46,6 +46,9 @@ jobs:
     name: Образ в Artifact Registry
     needs: test
     runs-on: ubuntu-latest
+    # Отправка в реестр однажды подвисла на 42 минуты без единой строки
+    # в логе. Лучше упасть по таймауту, чем жечь время раннера впустую.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,6 +101,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Без этого build-push-action прикладывает к образу provenance-
+          # и sbom-манифесты в формате OCI 1.1. Реестры, которые его не
+          # поддерживают, на таком манифесте спотыкаются.
+          provenance: false
+          sbom: false
           # mode=min сохраняет только слои итогового образа.
           #
           # mode=max выгружал бы ещё и промежуточную ступень — JDK, Gradle
