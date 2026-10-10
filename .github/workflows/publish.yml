@@ -122,13 +122,32 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
+      # Реестр cloud.ru отвечает нестабильно: отдельные слои приходится
+      # перезапрашивать, а запись манифеста иногда зависает совсем.
+      # Поэтому жёсткий лимит на попытку и три захода вместо бесконечного
+      # ожидания. Повтор дёшев: уже отправленные слои реестр не принимает
+      # заново, остаётся только манифест.
       - name: Отправка в реестр
         run: |
           set -euo pipefail
+
+          push_with_retry() {
+            tag="$1"
+            for attempt in 1 2 3; do
+              echo "==> $tag (попытка $attempt)"
+              if timeout 300 docker push "$tag"; then
+                return 0
+              fi
+              echo "не удалось, пауза 20 секунд"
+              sleep 20
+            done
+            echo "::error::не удалось отправить $tag за три попытки"
+            return 1
+          }
+
           while IFS= read -r tag; do
             [ -z "$tag" ] && continue
-            echo "==> $tag"
-            docker push "$tag"
+            push_with_retry "$tag"
           done <<< "${{ steps.meta.outputs.tags }}"
 
       - name: Удаление старых образов
