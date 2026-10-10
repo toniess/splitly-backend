@@ -90,7 +90,13 @@ jobs:
             type=sha,format=long
             type=raw,value=latest
 
-      - name: Сборка и отправка
+      # Собираем в локальный демон, НЕ отправляя сразу.
+      #
+      # buildx общается с реестром сам, в обход docker-демона, и на реестре
+      # cloud.ru это намертво зависает: шаг "exporting to image" не выдаёт
+      # ни строки прогресса и не завершается. Обычный `docker push` в тот же
+      # репозиторий при этом проходит за секунды — проверено вручную.
+      - name: Сборка
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -98,7 +104,8 @@ jobs:
           # образ под архитектуру раннера, и на платформе он упадёт
           # с exec format error
           platforms: linux/amd64
-          push: true
+          load: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Без этого build-push-action прикладывает к образу provenance-
@@ -114,6 +121,15 @@ jobs:
           # за которые Gradle заново скачивает зависимости внутри сборки.
           cache-from: type=gha
           cache-to: type=gha,mode=min
+
+      - name: Отправка в реестр
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "==> $tag"
+            docker push "$tag"
+          done <<< "${{ steps.meta.outputs.tags }}"
 
       - name: Удаление старых образов
         env:
