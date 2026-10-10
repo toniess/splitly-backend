@@ -22,3 +22,14 @@ spring:
       # Соединение, провисевшее дольше паузы Neon, уже мертво — не держим его долго
       max-lifetime: 300000
       idle-timeout: 120000
+
+management:
+  endpoint:
+    health:
+      # Отдельные эндпоинты /actuator/health/liveness и /readiness.
+      # Платформе для liveness-пробы нужен именно liveness: он проверяет,
+      # жив ли процесс, и не ходит в базу. Общий /actuator/health включает
+      # проверку Neon — спящая база выглядела бы как мёртвое приложение,
+      # и платформа перезапускала бы контейнер по кругу.
+      probes:
+        enabled: true

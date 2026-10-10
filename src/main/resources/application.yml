@@ -1,3 +1,8 @@
+server:
+  # Container Apps задаёт PORT сама и не даёт его переопределить.
+  # Локально и в тестах переменной нет — остаётся 8080.
+  port: ${PORT:8080}
+
 spring:
   config:
     import:
