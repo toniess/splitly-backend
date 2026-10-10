@@ -120,9 +120,14 @@ curl -X POST https://api.toniess.dev/api/v1/auth/register \
 
 | Где | Имя | Значение |
 | --- | --- | --- |
-| Secrets and variables → Actions → **Variables** | `CLOUDRU_REGISTRY` | `<имя-реестра>.cr.cloud.ru` |
-| Secrets and variables → Actions → **Secrets** | `CLOUDRU_KEY_ID` | Key ID реестра |
-| Secrets and variables → Actions → **Secrets** | `CLOUDRU_KEY_SECRET` | Key Secret реестра |
+| **Variables** | `CLOUDRU_REGISTRY` | `toniess.cr.cloud.ru` |
+| **Variables** | `IMAGE_NAME` | `splitly` |
+| **Secrets** | `CLOUDRU_KEY_ID` | Key ID реестра |
+| **Secrets** | `CLOUDRU_KEY_SECRET` | Key Secret реестра |
+
+Реестр общий на аккаунт, внутри него несколько репозиториев — splitly
+соседствует с образами других проектов. Ключ подходит тот же, заводить
+отдельный реестр не нужно.
 
 Адрес реестра лежит в переменных, а не в секретах, намеренно: GitHub маскирует
 секреты во всём выводе, и в логах вместо тега образа было бы `***`.

@@ -53,6 +53,21 @@ jobs:
           # Предыдущий коммит нужен, чтобы вычислить тег прошлого образа.
           fetch-depth: 2
 
+      - name: Проверка настроек репозитория
+        env:
+          REGISTRY: ${{ vars.CLOUDRU_REGISTRY }}
+          KEY_ID: ${{ secrets.CLOUDRU_KEY_ID }}
+          KEY_SECRET: ${{ secrets.CLOUDRU_KEY_SECRET }}
+        run: |
+          miss=""
+          [ -n "$REGISTRY" ]   || miss="$miss vars.CLOUDRU_REGISTRY"
+          [ -n "$KEY_ID" ]     || miss="$miss secrets.CLOUDRU_KEY_ID"
+          [ -n "$KEY_SECRET" ] || miss="$miss secrets.CLOUDRU_KEY_SECRET"
+          if [ -n "$miss" ]; then
+            echo "::error::Не заданы:$miss — см. deploy/README.md"
+            exit 1
+          fi
+
       - name: Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -67,9 +82,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ vars.CLOUDRU_REGISTRY }}/splitly
+          images: ${{ vars.CLOUDRU_REGISTRY }}/${{ vars.IMAGE_NAME || 'splitly' }}
           tags: |
-            type=sha,format=short
+            type=sha,format=long
             type=raw,value=latest
 
       - name: Сборка и отправка
@@ -93,17 +108,14 @@ jobs:
           REGISTRY_USERNAME: ${{ secrets.CLOUDRU_KEY_ID }}
           REGISTRY_PASSWORD: ${{ secrets.CLOUDRU_KEY_SECRET }}
         run: |
-          # Ровно семь символов от полного хеша: так же, как это делает
-          # metadata-action для тега type=sha. git rev-parse --short при
-          # коллизии вернул бы больше, и тег не совпал бы.
-          current="sha-${GITHUB_SHA:0:7}"
+          # Полный хеш, как в теге type=sha,format=long. Сокращённый вариант
+          # пришлось бы подгонять под длину, которую выбирает metadata-action.
+          current="sha-${GITHUB_SHA}"
+          previous="sha-$(git rev-parse HEAD~1 2>/dev/null || echo отсутствует)"
 
-          previous_full="$(git rev-parse HEAD~1 2>/dev/null || true)"
-          previous="sha-${previous_full:0:7}"
-
-          echo "оставляем: $current, ${previous}, latest"
+          echo "оставляем: $current, $previous, latest"
           ./deploy/prune-registry.sh \
-              "${{ vars.CLOUDRU_REGISTRY }}" splitly \
+              "${{ vars.CLOUDRU_REGISTRY }}" "${{ vars.IMAGE_NAME || 'splitly' }}" \
               "$current" "$previous" latest
 
       - name: Итог
