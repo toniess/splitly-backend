@@ -1,0 +1,56 @@
+# Боевая конфигурация. Сервиса базы здесь нет: она живёт в Neon, вне этого сервера.
+#
+# Запуск на сервере:  docker compose -f docker-compose.prod.yml up -d
+
+services:
+  app:
+    image: splitly:prod
+    container_name: splitly-app
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    # Порт наружу не публикуется: до приложения можно достучаться только
+    # изнутри сети compose, то есть только через Caddy.
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Без ограничения логи JSON съедят диск за недели
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: splitly-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Сертификаты переживают пересоздание контейнера. Без этого тома
+      # Let's Encrypt упрётся в лимит на повторные выпуски.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy-data:
+  caddy-config:

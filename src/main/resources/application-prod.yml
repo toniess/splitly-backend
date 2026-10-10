@@ -3,8 +3,22 @@ logging:
     format:
       console: ecs
 
+server:
+  # За обратным прокси приложение видит http и адрес контейнера Caddy.
+  # Без этой настройки в ссылках окажется http://app:8080 вместо
+  # https://api.toniess.dev, а в логах — внутренний IP вместо клиентского.
+  forward-headers-strategy: framework
+
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      # Neon на бесплатном тарифе засыпает после простоя:
+      # первое соединение ждёт, пока база проснётся.
+      connection-timeout: 30000
+      maximum-pool-size: 10
+      # Соединение, провисевшее дольше паузы Neon, уже мертво — не держим его долго
+      max-lifetime: 300000
+      idle-timeout: 120000
