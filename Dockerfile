@@ -22,7 +22,11 @@ RUN ./gradlew bootJar --no-daemon
 # под неё не подходит.
 RUN java -Djarmode=tools -jar build/libs/*-SNAPSHOT.jar \
         extract --layers --destination extracted \
-    && mv extracted/application/*-SNAPSHOT.jar extracted/application/app.jar
+    && mv extracted/application/*-SNAPSHOT.jar extracted/application/app.jar \
+    && mkdir -p extracted/runtime \
+    && for layer in dependencies spring-boot-loader snapshot-dependencies; do \
+           cp -a "extracted/$layer/." extracted/runtime/; \
+       done
 
 # ============================================================
 #  Ступень 2: запуск. Только JRE — ни Gradle, ни компилятора,
@@ -36,11 +40,14 @@ WORKDIR /app
 # права внутри контейнера будут минимальными.
 RUN addgroup -S splitly && adduser -S splitly -G splitly
 
-# Порядок важен: от самого редко меняющегося слоя к самому частому.
-# При пересборке после правки кода Docker переиспользует первые три.
-COPY --from=builder --chown=splitly:splitly /build/extracted/dependencies/ ./
-COPY --from=builder --chown=splitly:splitly /build/extracted/spring-boot-loader/ ./
-COPY --from=builder --chown=splitly:splitly /build/extracted/snapshot-dependencies/ ./
+# Два слоя, а не четыре: spring-boot-loader и snapshot-dependencies у нас
+# пусты, и отдельными слоями были только лишней работой для реестра.
+# В builder они слиты с зависимостями — если когда-нибудь перестанут быть
+# пустыми, их содержимое всё равно попадёт в образ.
+#
+# Порядок важен: сначала редко меняющееся, потом частое. После правки кода
+# пересобирается и уезжает только второй слой — около 150 КБ.
+COPY --from=builder --chown=splitly:splitly /build/extracted/runtime/ ./
 COPY --from=builder --chown=splitly:splitly /build/extracted/application/ ./
 
 USER splitly

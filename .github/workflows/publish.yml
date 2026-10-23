@@ -74,6 +74,11 @@ jobs:
       - name: Buildx
         uses: docker/setup-buildx-action@v3
 
+      # crane — отдельная реализация клиента реестра, не зависящая
+      # от docker-демона. Тот же инструмент используется в meridian-web.
+      - name: crane
+        uses: imjasonh/setup-crane@v0.4
+
       - name: Вход в реестр
         uses: docker/login-action@v3
         with:
@@ -122,33 +127,28 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
-      # Реестр cloud.ru отвечает нестабильно: отдельные слои приходится
-      # перезапрашивать, а запись манифеста иногда зависает совсем.
-      # Поэтому жёсткий лимит на попытку и три захода вместо бесконечного
-      # ожидания. Повтор дёшев: уже отправленные слои реестр не принимает
-      # заново, остаётся только манифест.
+      # Отправляем через crane, а не docker push: клиент docker на этом
+      # реестре зависал на записи манифеста — слои уходили, а тег
+      # не появлялся. crane говорит по тому же протоколу своим кодом.
+      #
+      # Образ отправляется один раз, второй тег навешивается на уже
+      # загруженный манифест — повторная заливка слоёв не нужна.
       - name: Отправка в реестр
+        env:
+          IMAGE: ${{ vars.CLOUDRU_REGISTRY }}/${{ vars.IMAGE_NAME || 'splitly' }}
         run: |
           set -euo pipefail
+          sha_tag="$IMAGE:sha-${GITHUB_SHA}"
 
-          push_with_retry() {
-            tag="$1"
-            for attempt in 1 2 3; do
-              echo "==> $tag (попытка $attempt)"
-              if timeout 300 docker push "$tag"; then
-                return 0
-              fi
-              echo "не удалось, пауза 20 секунд"
-              sleep 20
-            done
-            echo "::error::не удалось отправить $tag за три попытки"
-            return 1
-          }
+          echo "==> сохраняю образ в архив"
+          docker save "$sha_tag" -o /tmp/image.tar
+          ls -lh /tmp/image.tar
 
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            push_with_retry "$tag"
-          done <<< "${{ steps.meta.outputs.tags }}"
+          echo "==> crane push $sha_tag"
+          crane push /tmp/image.tar "$sha_tag"
+
+          echo "==> crane tag latest"
+          crane tag "$sha_tag" latest
 
       # Образ к этому моменту уже опубликован, а чистка реестра — housekeeping.
       # Её сбой не должен красить выкладку в красный: ревизия в Container Apps
