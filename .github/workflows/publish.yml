@@ -150,7 +150,11 @@ jobs:
             push_with_retry "$tag"
           done <<< "${{ steps.meta.outputs.tags }}"
 
+      # Образ к этому моменту уже опубликован, а чистка реестра — housekeeping.
+      # Её сбой не должен красить выкладку в красный: ревизия в Container Apps
+      # развернётся в любом случае. Шаг останется видимым как упавший.
       - name: Удаление старых образов
+        continue-on-error: true
         env:
           REGISTRY_USERNAME: ${{ secrets.CLOUDRU_KEY_ID }}
           REGISTRY_PASSWORD: ${{ secrets.CLOUDRU_KEY_SECRET }}
