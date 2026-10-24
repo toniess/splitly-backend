@@ -3,7 +3,7 @@
 # Сборка образа под Container Apps и отправка в Artifact Registry.
 #
 #   ./deploy/build-and-push.sh <адрес-реестра> [тег]
-#   ./deploy/build-and-push.sh splitly.cr.cloud.ru/splitly
+#   ./deploy/build-and-push.sh toniess.cr.cloud.ru
 #
 # Перед первым запуском нужно войти в реестр:
 #   docker login <адрес-реестра>

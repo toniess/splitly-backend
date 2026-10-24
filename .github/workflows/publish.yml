@@ -3,15 +3,13 @@ name: Сборка и публикация образа
 on:
   push:
     branches: [main]
-  # Позволяет запустить выкладку вручную из вкладки Actions,
-  # не делая пустой коммит
   workflow_dispatch:
 
+# Прогоны идут строго по очереди: иначе очистка одного могла бы удалить
+# образ, который только что залил другой
 concurrency:
-  # Если пуши идут один за другим, незавершённую сборку предыдущего нет смысла
-  # доводить до конца — в реестр всё равно поедет последняя
-  group: publish-${{ github.ref }}
-  cancel-in-progress: true
+  group: publish
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -19,20 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: JDK 21
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
 
-      - name: Gradle с кешем
-        uses: gradle/actions/setup-gradle@v4
-
-      # Testcontainers поднимает PostgreSQL в Docker — на ubuntu-latest он есть
-      # из коробки, ставить ничего не нужно
-      - name: Прогон тестов
-        run: ./gradlew test --no-daemon
+      # Testcontainers поднимает PostgreSQL в Docker, он на раннере есть
+      - run: ./gradlew test --no-daemon
 
       - name: Отчёты о тестах
         if: failure()
@@ -46,139 +38,66 @@ jobs:
     name: Образ в Artifact Registry
     needs: test
     runs-on: ubuntu-latest
-    # Отправка в реестр однажды подвисла на 42 минуты без единой строки
-    # в логе. Лучше упасть по таймауту, чем жечь время раннера впустую.
     timeout-minutes: 20
+    env:
+      IMAGE: ${{ vars.CLOUDRU_REGISTRY }}/splitly
+      TAG: sha-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          # По умолчанию checkout берёт один коммит, и HEAD~1 не существует.
-          # Предыдущий коммит нужен, чтобы вычислить тег прошлого образа.
-          fetch-depth: 2
+      - uses: docker/setup-buildx-action@v3
+      - uses: imjasonh/setup-crane@v0.4
 
-      - name: Проверка настроек репозитория
-        env:
-          REGISTRY: ${{ vars.CLOUDRU_REGISTRY }}
-          KEY_ID: ${{ secrets.CLOUDRU_KEY_ID }}
-          KEY_SECRET: ${{ secrets.CLOUDRU_KEY_SECRET }}
-        run: |
-          miss=""
-          [ -n "$REGISTRY" ]   || miss="$miss vars.CLOUDRU_REGISTRY"
-          [ -n "$KEY_ID" ]     || miss="$miss secrets.CLOUDRU_KEY_ID"
-          [ -n "$KEY_SECRET" ] || miss="$miss secrets.CLOUDRU_KEY_SECRET"
-          if [ -n "$miss" ]; then
-            echo "::error::Не заданы:$miss — см. deploy/README.md"
-            exit 1
-          fi
-
-      - name: Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # crane — отдельная реализация клиента реестра, не зависящая
-      # от docker-демона.
-      - name: crane
-        uses: imjasonh/setup-crane@v0.4
-
-      # Входит только crane. Docker-демону и buildx учётные данные реестра
-      # не нужны: они в реестр больше не ходят.
+      # С реестром работает только crane. Docker и buildx берут токен
+      # POST-запросом к id.cloud.ru, а тот с раннеров GitHub через раз
+      # отвечает 502 — отправка зависала без единой строки в логе.
+      # crane берёт токен GET-запросом, и у него этой проблемы нет.
       - name: Вход в реестр
         env:
-          REGISTRY: ${{ vars.CLOUDRU_REGISTRY }}
           KEY_ID: ${{ secrets.CLOUDRU_KEY_ID }}
           KEY_SECRET: ${{ secrets.CLOUDRU_KEY_SECRET }}
-        run: echo "$KEY_SECRET" | crane auth login "$REGISTRY" -u "$KEY_ID" --password-stdin
+        run: echo "$KEY_SECRET" | crane auth login "${{ vars.CLOUDRU_REGISTRY }}" -u "$KEY_ID" --password-stdin
 
-      - name: Теги образа
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ vars.CLOUDRU_REGISTRY }}/${{ vars.IMAGE_NAME || 'splitly' }}
-          tags: |
-            type=sha,format=long
-            type=raw,value=latest
-
-      # Собираем в архив, ни в реестр, ни в демон образ не попадает.
-      #
-      # Docker-демон и buildkit берут токен реестра POST-запросом
-      # к id.cloud.ru, и с раннера тот через раз отвечает 502 Bad Gateway:
-      # в «Диагностике реестра» на этом падали и buildx, и docker push,
-      # а docker push блоба на 27 МБ дважды завис после «Pushed».
-      # crane берёт токен GET-запросом и тот же блоб отправил за 10 секунд.
+      # Поэтому собираем в архив, а не в реестр
       - name: Сборка
         uses: docker/build-push-action@v6
         with:
           context: .
-          # Облако запускает amd64. Без этой строки на раннере соберётся
-          # образ под архитектуру раннера, и на платформе он упадёт
-          # с exec format error
+          # Облако запускает amd64
           platforms: linux/amd64
+          tags: ${{ env.IMAGE }}:${{ env.TAG }}
           outputs: type=docker,dest=/tmp/image.tar
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Без этого build-push-action прикладывает к образу provenance-
-          # и sbom-манифесты в формате OCI 1.1. Реестры, которые его не
-          # поддерживают, на таком манифесте спотыкаются.
-          provenance: false
-          sbom: false
-          # mode=min сохраняет только слои итогового образа.
-          #
-          # mode=max выгружал бы ещё и промежуточную ступень — JDK, Gradle
-          # и весь кеш зависимостей, около гигабайта. Первая такая выгрузка
-          # заняла больше двадцати минут, и это дороже, чем те полторы минуты,
-          # за которые Gradle заново скачивает зависимости внутри сборки.
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
-      # Образ отправляется один раз, второй тег навешивается на уже
-      # загруженный манифест — повторная заливка слоёв не нужна.
-      #
-      # -v пишет каждый HTTP-запрос; в лог идут только строки запросов
-      # и ответов, без тел. Если отправка снова встанет, последняя строка
-      # «-->» без ответа покажет, на чём именно.
-      - name: Отправка в реестр
-        env:
-          IMAGE: ${{ vars.CLOUDRU_REGISTRY }}/${{ vars.IMAGE_NAME || 'splitly' }}
+      - name: Отправка
+        id: push
         run: |
-          set -uo pipefail
-          sha_tag="$IMAGE:sha-${GITHUB_SHA}"
-          ls -lh /tmp/image.tar
+          # Текущий latest станет предыдущим образом — его оставим для отката
+          echo "previous=$(crane digest "$IMAGE:latest" 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+          timeout 600 crane push /tmp/image.tar "$IMAGE:$TAG"
+          crane tag "$IMAGE:$TAG" latest
+          echo "current=$(crane digest "$IMAGE:$TAG")" >> "$GITHUB_OUTPUT"
 
-          echo "==> crane push $sha_tag"
-          timeout 600 crane push -v /tmp/image.tar "$sha_tag" > /tmp/crane.log 2>&1
-          rc=$?
-          grep -E -- '-->|<--' /tmp/crane.log
-          [ "$rc" -eq 0 ] || { echo "::error::crane push завершился с кодом $rc"; exit "$rc"; }
-
-          echo "==> crane tag latest"
-          crane tag "$sha_tag" latest
-
-      # Образ к этому моменту уже опубликован, а чистка реестра — housekeeping.
-      # Её сбой не должен красить выкладку в красный: ревизия в Container Apps
-      # развернётся в любом случае. Шаг останется видимым как упавший.
-      - name: Удаление старых образов
+      # В реестре остаются текущий и предыдущий образ, остальные удаляются.
+      # Сравнение по дайджестам: удаление по дайджесту снимает все теги
+      # образа. Сбой очистки не валит выкладку — образ уже опубликован.
+      - name: Очистка реестра
         continue-on-error: true
         env:
-          REGISTRY_USERNAME: ${{ secrets.CLOUDRU_KEY_ID }}
-          REGISTRY_PASSWORD: ${{ secrets.CLOUDRU_KEY_SECRET }}
+          CURRENT: ${{ steps.push.outputs.current }}
+          PREVIOUS: ${{ steps.push.outputs.previous }}
         run: |
-          # Полный хеш, как в теге type=sha,format=long. Сокращённый вариант
-          # пришлось бы подгонять под длину, которую выбирает metadata-action.
-          current="sha-${GITHUB_SHA}"
-          previous="sha-$(git rev-parse HEAD~1 2>/dev/null || echo отсутствует)"
-
-          echo "оставляем: $current, $previous, latest"
-          ./deploy/prune-registry.sh \
-              "${{ vars.CLOUDRU_REGISTRY }}" "${{ vars.IMAGE_NAME || 'splitly' }}" \
-              "$current" "$previous" latest
+          # Без дайджеста нового образа удалилось бы и оно
+          [ -n "$CURRENT" ] || { echo "::error::неизвестен дайджест нового образа"; exit 1; }
+          for tag in $(crane ls "$IMAGE"); do
+            digest=$(crane digest "$IMAGE:$tag")
+            if [ "$digest" != "$CURRENT" ] && [ "$digest" != "$PREVIOUS" ]; then
+              echo "$digest"
+            fi
+          done | sort -u | while read -r digest; do
+            echo "удаляю $digest"
+            crane delete "$IMAGE@$digest"
+          done
 
       - name: Итог
-        run: |
-          {
-            echo "### Образ опубликован"
-            echo
-            echo '```'
-            echo "${{ steps.meta.outputs.tags }}"
-            echo '```'
-            echo
-            echo "Создай ревизию в Container Apps с тегом по хешу коммита."
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Опубликовано \`$IMAGE:$TAG\` и \`latest\`" >> "$GITHUB_STEP_SUMMARY"
