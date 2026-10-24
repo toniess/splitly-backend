@@ -47,6 +47,29 @@ jobs:
           docker tag eclipse-temurin:21-jre-alpine ${{ vars.CLOUDRU_REGISTRY }}/probe-runner-jre:v1
           timeout 300 docker push ${{ vars.CLOUDRU_REGISTRY }}/probe-runner-jre:v1
 
+      # Шаг выше ничего не загружает: все слои JRE уже лежат в реестре после
+      # пробы с Mac, и docker отвечает «Layer already exists». Настоящая
+      # загрузка с раннера — только здесь. Случайные байты не сжимаются,
+      # как и jar-файлы, и каждый прогон дают новый блоб.
+      #
+      # 27 МБ — столько meridian-web заливает с раннера каждый раз без проблем.
+      # 64 МБ — размер нашего слоя с библиотеками.
+      - name: Новые блобы 27 и 64 МБ
+        if: always()
+        run: |
+          set -euo pipefail
+          for mb in 27 64; do
+            dir=$(mktemp -d)
+            head -c "${mb}M" /dev/urandom > "$dir/blob"
+            printf 'FROM scratch\nCOPY blob /blob\n' > "$dir/Dockerfile"
+            tag=${{ vars.CLOUDRU_REGISTRY }}/probe-runner-random:${mb}mb-${{ github.run_id }}
+            docker build -q -t "$tag" "$dir"
+            echo "==> ${mb} МБ"
+            start=$(date +%s)
+            timeout 300 docker push "$tag"
+            echo "    за $(( $(date +%s) - start )) с"
+          done
+
       # Собран здесь же, обычным сборщиком docker.
       - name: Образ, собранный на раннере (драйвер docker)
         if: always()
