@@ -70,6 +70,27 @@ jobs:
             echo "    за $(( $(date +%s) - start )) с"
           done
 
+      # docker push на 27 МБ висит молча: слой «Pushed», а дальше ни строки.
+      # crane -v печатает каждый HTTP-запрос — видно, какой из них не получил
+      # ответа. Заголовок Authorization crane в логе скрывает сам.
+      - name: crane
+        if: always()
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Новый блоб 27 МБ через crane -v
+        if: always()
+        run: |
+          set -uo pipefail
+          head -c 27M /dev/urandom > /tmp/blob
+          tar -C /tmp -cf /tmp/layer.tar blob
+          ref=${{ vars.CLOUDRU_REGISTRY }}/probe-runner-random:crane-${{ github.run_id }}
+          start=$(date +%s)
+          timeout 240 crane append -v -f /tmp/layer.tar -t "$ref" > /tmp/crane.log 2>&1
+          rc=$?
+          echo "код $rc, за $(( $(date +%s) - start )) с"
+          grep -E -- '-->|<--' /tmp/crane.log | tail -40
+          exit $rc
+
       # Собран здесь же, обычным сборщиком docker.
       - name: Образ, собранный на раннере (драйвер docker)
         if: always()
