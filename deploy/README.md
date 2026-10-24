@@ -121,6 +121,7 @@ curl -X POST https://api.toniess.dev/api/v1/auth/register \
 | Где | Имя | Значение |
 | --- | --- | --- |
 | **Variables** | `CLOUDRU_REGISTRY` | `toniess.cr.cloud.ru` |
+| **Variables** | `IMAGE_NAME` | `splitly` |
 | **Secrets** | `CLOUDRU_KEY_ID` | Key ID реестра |
 | **Secrets** | `CLOUDRU_KEY_SECRET` | Key Secret реестра |
 
@@ -142,7 +143,7 @@ POST-запросом к `id.cloud.ru`, и с раннеров GitHub тот ч�
 
 ### Очистка реестра
 
-После отправки в репозитории `splitly` остаются два образа: только что
+После отправки в репозитории `IMAGE_NAME` остаются два образа: только что
 собранный и тот, что до этого был `latest`, — на случай отката. Остальные
 удаляются по дайджесту вместе со всеми своими тегами. Сбой очистки выкладку
 не валит.
