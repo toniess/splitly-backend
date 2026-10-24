@@ -20,8 +20,12 @@ mode и такую блокировку не удержит.
 `sslmode=require` обязателен: Neon отвергает незашифрованные соединения.
 
 ```
-jdbc:postgresql://ep-XXXX.REGION.neon.tech:5432/splitly?sslmode=require
+jdbc:postgresql://ep-XXXX.REGION.neon.tech/neondb?user=USER&password=PASS&sslmode=require&channelBinding=require
 ```
+
+Neon показывает строку с `-pooler` в имени хоста — его нужно убрать.
+Символы `&`, `=`, `%`, `#` в пароле кодируются (URL-encode), иначе строка
+разберётся неправильно.
 
 Миграции `V1`–`V9` накатятся сами при первом старте приложения.
 
@@ -58,9 +62,7 @@ docker login <имя-реестра>.cr.cloud.ru -u <key_id> -p <key_secret>
 
 ```
 SPRING_PROFILES_ACTIVE=prod
-SPRING_DATASOURCE_URL=jdbc:postgresql://ep-XXXX.neon.tech:5432/splitly?sslmode=require
-SPRING_DATASOURCE_USERNAME=...
-SPRING_DATASOURCE_PASSWORD=...
+SPRING_DATASOURCE_URL=jdbc:postgresql://ep-XXXX.neon.tech/neondb?user=...&password=...&sslmode=require&channelBinding=require
 JWT_SECRET=...
 ```
 

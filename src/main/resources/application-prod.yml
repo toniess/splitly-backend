@@ -11,9 +11,11 @@ server:
 
 spring:
   datasource:
+    # Логин и пароль — параметрами в самой строке:
+    #   jdbc:postgresql://host/db?user=...&password=...&sslmode=require
+    # Отдельные SPRING_DATASOURCE_USERNAME и _PASSWORD тоже сработают:
+    # Spring подхватывает их из окружения сам.
     url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
       # Neon на бесплатном тарифе засыпает после простоя:
       # первое соединение ждёт, пока база проснётся.
