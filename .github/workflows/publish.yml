@@ -75,16 +75,18 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # crane — отдельная реализация клиента реестра, не зависящая
-      # от docker-демона. Тот же инструмент используется в meridian-web.
+      # от docker-демона.
       - name: crane
         uses: imjasonh/setup-crane@v0.4
 
+      # Входит только crane. Docker-демону и buildx учётные данные реестра
+      # не нужны: они в реестр больше не ходят.
       - name: Вход в реестр
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ vars.CLOUDRU_REGISTRY }}
-          username: ${{ secrets.CLOUDRU_KEY_ID }}
-          password: ${{ secrets.CLOUDRU_KEY_SECRET }}
+        env:
+          REGISTRY: ${{ vars.CLOUDRU_REGISTRY }}
+          KEY_ID: ${{ secrets.CLOUDRU_KEY_ID }}
+          KEY_SECRET: ${{ secrets.CLOUDRU_KEY_SECRET }}
+        run: echo "$KEY_SECRET" | crane auth login "$REGISTRY" -u "$KEY_ID" --password-stdin
 
       - name: Теги образа
         id: meta
@@ -95,12 +97,13 @@ jobs:
             type=sha,format=long
             type=raw,value=latest
 
-      # Собираем в локальный демон, НЕ отправляя сразу.
+      # Собираем в архив, ни в реестр, ни в демон образ не попадает.
       #
-      # buildx общается с реестром сам, в обход docker-демона, и на реестре
-      # cloud.ru это намертво зависает: шаг "exporting to image" не выдаёт
-      # ни строки прогресса и не завершается. Обычный `docker push` в тот же
-      # репозиторий при этом проходит за секунды — проверено вручную.
+      # Docker-демон и buildkit берут токен реестра POST-запросом
+      # к id.cloud.ru, и с раннера тот через раз отвечает 502 Bad Gateway:
+      # в «Диагностике реестра» на этом падали и buildx, и docker push,
+      # а docker push блоба на 27 МБ дважды завис после «Pushed».
+      # crane берёт токен GET-запросом и тот же блоб отправил за 10 секунд.
       - name: Сборка
         uses: docker/build-push-action@v6
         with:
@@ -109,8 +112,7 @@ jobs:
           # образ под архитектуру раннера, и на платформе он упадёт
           # с exec format error
           platforms: linux/amd64
-          load: true
-          push: false
+          outputs: type=docker,dest=/tmp/image.tar
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Без этого build-push-action прикладывает к образу provenance-
@@ -127,25 +129,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
-      # Отправляем через crane, а не docker push: клиент docker на этом
-      # реестре зависал на записи манифеста — слои уходили, а тег
-      # не появлялся. crane говорит по тому же протоколу своим кодом.
-      #
       # Образ отправляется один раз, второй тег навешивается на уже
       # загруженный манифест — повторная заливка слоёв не нужна.
+      #
+      # -v пишет каждый HTTP-запрос; в лог идут только строки запросов
+      # и ответов, без тел. Если отправка снова встанет, последняя строка
+      # «-->» без ответа покажет, на чём именно.
       - name: Отправка в реестр
         env:
           IMAGE: ${{ vars.CLOUDRU_REGISTRY }}/${{ vars.IMAGE_NAME || 'splitly' }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           sha_tag="$IMAGE:sha-${GITHUB_SHA}"
-
-          echo "==> сохраняю образ в архив"
-          docker save "$sha_tag" -o /tmp/image.tar
           ls -lh /tmp/image.tar
 
           echo "==> crane push $sha_tag"
-          crane push /tmp/image.tar "$sha_tag"
+          timeout 600 crane push -v /tmp/image.tar "$sha_tag" > /tmp/crane.log 2>&1
+          rc=$?
+          grep -E -- '-->|<--' /tmp/crane.log
+          [ "$rc" -eq 0 ] || { echo "::error::crane push завершился с кодом $rc"; exit "$rc"; }
 
           echo "==> crane tag latest"
           crane tag "$sha_tag" latest

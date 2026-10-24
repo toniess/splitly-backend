@@ -30,6 +30,36 @@ jobs:
           username: ${{ secrets.CLOUDRU_KEY_ID }}
           password: ${{ secrets.CLOUDRU_KEY_SECRET }}
 
+      # docker и buildx берут токен POST-запросом и с раннера получают 502.
+      # С Mac тот же POST отвечает 404 за 40 мс, и клиент уходит на GET.
+      # Если 502 бывает только с нашим ключом, а с фальшивым нет — виноват
+      # ключ. Печатаются только коды ответа: в теле лежит токен.
+      - name: Токен POST-запросом — наш ключ и фальшивый
+        if: always()
+        env:
+          REGISTRY: ${{ vars.CLOUDRU_REGISTRY }}
+          KEY_ID: ${{ secrets.CLOUDRU_KEY_ID }}
+          KEY_SECRET: ${{ secrets.CLOUDRU_KEY_SECRET }}
+        run: |
+          set -uo pipefail
+          challenge=$(curl -sS -m 20 -D - -o /dev/null "https://$REGISTRY/v2/" | grep -i '^www-authenticate')
+          realm=$(echo "$challenge" | sed -E 's/.*realm="([^"]+)".*/\1/')
+          service=$(echo "$challenge" | sed -E 's/.*service="([^"]+)".*/\1/')
+          scope="repository:probe-runner-random:pull,push"
+
+          post() {
+            curl -sS -m 30 -o /dev/null -w '%{http_code} %{time_total}s' \
+              --data-urlencode grant_type=password --data-urlencode client_id=containerd-client \
+              --data-urlencode "username=$1" --data-urlencode "password=$2" \
+              --data-urlencode "service=$service" --data-urlencode "scope=$scope" "$realm"
+          }
+          for i in 1 2 3 4 5; do
+            echo "POST наш ключ #$i:       $(post "$KEY_ID" "$KEY_SECRET")"
+            echo "POST фальшивый ключ #$i: $(post fake-id fake-secret)"
+            echo "GET  наш ключ #$i:       $(curl -sS -m 30 -o /dev/null -w '%{http_code} %{time_total}s' \
+                -u "$KEY_ID:$KEY_SECRET" "$realm?service=$service&scope=$scope")"
+          done
+
       # Один слой, 13 МБ. С Mac проходил за секунду.
       - name: Крошечный образ
         run: |
