@@ -27,3 +27,7 @@ management:
         include:
           - health
           - info
+cors:
+  # Источники, которым разрешено ходить в API из браузера.
+  # На проде задаётся через CORS_ALLOWED_ORIGINS.
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
