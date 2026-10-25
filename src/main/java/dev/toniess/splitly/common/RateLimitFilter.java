@@ -7,8 +7,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
@@ -30,13 +32,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * одновременных запросов хватает, чтобы положить небольшой контейнер. Взлом для
  * этого не нужен, поэтому считаются <b>все</b> попытки, а не только неудачные.
  *
+ * <p>Фильтр стоит <b>после</b> цепочки Spring Security, а не перед ней: иначе он
+ * писал бы ответ раньше обработки CORS, и в отказе не было бы заголовка
+ * {@code Access-Control-Allow-Origin}. Браузер спрятал бы такой ответ и показал
+ * пользователю ошибку CORS вместо понятного «слишком много попыток». На защиту
+ * это не влияет — дорогая проверка пароля происходит дальше, в контроллере.
+ *
  * <p>Счётчики живут в памяти процесса. Это осознанный выбор: писать строку в базу
  * на каждый запрос — странная защита от перегрузки, а Redis ради одной ручки
  * не стоит отдельной инфраструктуры. Плата за простоту: при нескольких
  * экземплярах лимит умножается на их число, а при перезапуске счётчики обнуляются.
  */
 @Component
-@Order(RequestIdFilter.ORDER + 1)
+@Order(SecurityFilterProperties.DEFAULT_FILTER_ORDER + 1)
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
@@ -62,10 +70,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
         this.objectMapper = objectMapper;
     }
 
-    /** Фильтр нужен только на входе — лента трат и балансы столько не стоят. */
+    /**
+     * Только вход и только POST.
+     *
+     * <p>Предполётный {@code OPTIONS} исключён намеренно: браузер шлёт его перед
+     * каждым входом, и, попадая под счётчик, он съедал бы половину лимита.
+     * К тому же он ничего не считает — BCrypt работает только на POST.
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !PROTECTED_PATH.equals(request.getRequestURI());
+        return !PROTECTED_PATH.equals(request.getRequestURI())
+                || !HttpMethod.POST.matches(request.getMethod());
     }
 
     @Override
@@ -77,7 +92,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String client = request.getRemoteAddr();
         Instant now = Instant.now();
-        
+
         Window window = windows.compute(client, (key, previous) -> {
             if (previous == null || expired(previous, now)) {
                 return new Window(now, 1);

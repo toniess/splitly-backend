@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -128,6 +129,41 @@ class RateLimitIntegrationTest extends IntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("Предполётный OPTIONS не расходует лимит")
+    void preflightDoesNotConsumeBudget() throws Exception {
+        String ip = uniqueIp();
+
+        // Браузер шлёт предполёт перед каждым входом. Попади он под счётчик,
+        // реальных попыток помещалось бы вдвое меньше заявленного.
+        for (int attempt = 0; attempt < 10; attempt++) {
+            mockMvc.perform(withIp(options("/api/v1/auth/login"), ip)
+                            .header("Origin", "http://localhost:5173")
+                            .header("Access-Control-Request-Method", "POST"))
+                    .andExpect(status().isOk());
+        }
+
+        login(ip).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("В отказе есть заголовок CORS — иначе браузер его спрячет")
+    void rejectionIsVisibleToBrowser() throws Exception {
+        String ip = uniqueIp();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            mockMvc.perform(withIp(loginRequest(), ip).header("Origin", "http://localhost:5173"));
+        }
+
+        MvcResult result = mockMvc.perform(
+                        withIp(loginRequest(), ip).header("Origin", "http://localhost:5173"))
+                .andExpect(status().isTooManyRequests())
+                .andReturn();
+
+        assertThat(result.getResponse().getHeader("Access-Control-Allow-Origin"))
+                .as("без этого заголовка браузер покажет ошибку CORS вместо нашего сообщения")
+                .isEqualTo("http://localhost:5173");
+    }
+
     // ---------- вспомогательное ----------
 
     private Callable<Integer> statusOf(CountDownLatch start, String ip) {
@@ -138,9 +174,13 @@ class RateLimitIntegrationTest extends IntegrationTest {
     }
 
     private org.springframework.test.web.servlet.ResultActions login(String ip) throws Exception {
-        return mockMvc.perform(withIp(post("/api/v1/auth/login"), ip)
+        return mockMvc.perform(withIp(loginRequest(), ip));
+    }
+
+    private static MockHttpServletRequestBuilder loginRequest() {
+        return post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"email\":\"nobody@test.dev\",\"password\":\"wrong-password\"}"));
+                .content("{\"email\":\"nobody@test.dev\",\"password\":\"wrong-password\"}");
     }
 
     private static MockHttpServletRequestBuilder withIp(MockHttpServletRequestBuilder builder, String ip) {
