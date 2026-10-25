@@ -15,8 +15,17 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(RequestIdFilter.ORDER)
 public class RequestIdFilter extends OncePerRequestFilter {
+
+    /**
+     * Самый первый в цепочке: traceId нужен всем, кто пишет в лог после него,
+     * включая отказы аутентификации.
+     *
+     * <p>Константа публична, чтобы соседние фильтры объявляли свой порядок
+     * относительно неё, а не магическим числом.
+     */
+    public static final int ORDER = Ordered.HIGHEST_PRECEDENCE;
 
     public static final String TRACE_ID = "traceId";
     private static final String HEADER = "X-Request-Id";
