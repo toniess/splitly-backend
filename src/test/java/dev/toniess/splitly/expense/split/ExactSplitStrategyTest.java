@@ -1,5 +1,6 @@
 package dev.toniess.splitly.expense.split;
 
+import dev.toniess.splitly.expense.exception.InvalidSplitException;
 import dev.toniess.splitly.expense.exception.SharesDoNotMatchAmountException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,7 @@ class ExactSplitStrategyTest {
         // 50 − 50 + 100 = 100: сумма верна, но доля отрицательной быть не может
         assertThatThrownBy(() -> strategy.split(
                 new BigDecimal("100.00"), amounts("50.00", "-50.00", "100.00")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidSplitException.class);
     }
 
     @Test
@@ -75,7 +76,15 @@ class ExactSplitStrategyTest {
         // 33.333 + 33.333 + 33.334 = 100.000 — сумма сходится, но таких денег не бывает
         assertThatThrownBy(() -> strategy.split(
                 new BigDecimal("100.00"), amounts("33.333", "33.333", "33.334")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidSplitException.class);
+    }
+
+    @Test
+    @DisplayName("Участник без суммы — ошибка клиента, а не NPE")
+    void rejectsMissingShare() {
+        assertThatThrownBy(() -> strategy.split(
+                new BigDecimal("100.00"), List.of(new SplitInput(U1, new BigDecimal("100.00")), new SplitInput(U2, null))))
+                .isInstanceOf(InvalidSplitException.class);
     }
 
     @Test

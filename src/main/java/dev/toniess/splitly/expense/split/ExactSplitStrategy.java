@@ -1,6 +1,7 @@
 package dev.toniess.splitly.expense.split;
 
 import dev.toniess.splitly.expense.entity.SplitType;
+import dev.toniess.splitly.expense.exception.InvalidSplitException;
 import dev.toniess.splitly.expense.exception.SharesDoNotMatchAmountException;
 import org.springframework.stereotype.Component;
 
@@ -25,12 +26,17 @@ public class ExactSplitStrategy implements SplitStrategy {
             throw new IllegalArgumentException("Participants should not be empty");
         }
 
+        // Ввод пользователя: ответ 422 с объяснением, а не 500
+        if (participants.stream().anyMatch(splitInput -> splitInput.value() == null)) {
+            throw new InvalidSplitException("При делении точными суммами у каждого участника должна быть сумма");
+        }
+
         if (participants.stream().anyMatch((splitInput -> splitInput.value().compareTo(BigDecimal.ZERO) < 0))) {
-            throw new IllegalArgumentException("Any share should not be less than 0");
+            throw new InvalidSplitException("Сумма доли не может быть отрицательной");
         }
 
         if (!participants.stream().allMatch((splitInput -> splitInput.value().stripTrailingZeros().scale() <= 2))) {
-            throw new IllegalArgumentException("All the values should have scale less than or equal to 2");
+            throw new InvalidSplitException("В сумме доли не больше двух знаков после точки");
         }
 
 

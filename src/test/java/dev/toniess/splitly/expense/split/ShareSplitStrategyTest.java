@@ -1,5 +1,6 @@
 package dev.toniess.splitly.expense.split;
 
+import dev.toniess.splitly.expense.exception.InvalidSplitException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -121,14 +122,73 @@ class ShareSplitStrategyTest {
     @DisplayName("Отрицательный вес отклоняется")
     void rejectsNegativeWeight() {
         assertThatThrownBy(() -> strategy.split(new BigDecimal("100.00"), weights(1, -2)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidSplitException.class);
     }
 
     @Test
     @DisplayName("Все веса нулевые — делить не на что, отказ")
     void rejectsAllZeroWeights() {
         assertThatThrownBy(() -> strategy.split(new BigDecimal("100.00"), weights(0, 0)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidSplitException.class);
+    }
+
+    @Test
+    @DisplayName("Дробный вес — ошибка клиента: 422, а не ArithmeticException")
+    void rejectsFractionalWeight() {
+        List<SplitInput> participants = List.of(
+                new SplitInput(U1, new BigDecimal("1.5")), new SplitInput(U2, BigDecimal.ONE));
+
+        assertThatThrownBy(() -> strategy.split(new BigDecimal("100.00"), participants))
+                .isInstanceOf(InvalidSplitException.class);
+    }
+
+    @Test
+    @DisplayName("Вес 2.00 — то же целое 2, а не дробь")
+    void acceptsIntegerWeightWithTrailingZeros() {
+        List<SplitInput> participants = List.of(
+                new SplitInput(U1, new BigDecimal("2.00")), new SplitInput(U2, new BigDecimal("1")));
+
+        List<ShareAmount> shares = strategy.split(new BigDecimal("90.00"), participants);
+
+        assertThat(shares.get(0).amount()).isEqualByComparingTo("60.00");
+        assertThat(shares.get(1).amount()).isEqualByComparingTo("30.00");
+    }
+
+    @Test
+    @DisplayName("Участник без доли — ошибка клиента, а не NPE")
+    void rejectsMissingWeight() {
+        List<SplitInput> participants = List.of(new SplitInput(U1, BigDecimal.ONE), new SplitInput(U2, null));
+
+        assertThatThrownBy(() -> strategy.split(new BigDecimal("100.00"), participants))
+                .isInstanceOf(InvalidSplitException.class);
+    }
+
+    @Test
+    @DisplayName("Участник с весом 0 не получает копейку остатка")
+    void zeroWeightGetsNoRemainderCent() {
+        // 100.00 на веса 0:1:1:1 — база 33.33 × 3, копейка остатка уходит U2, а не U1
+        List<ShareAmount> shares = strategy.split(new BigDecimal("100.00"), weights(0, 1, 1, 1));
+
+        assertThat(shares.get(0).amount()).isEqualByComparingTo("0.00");
+        assertThat(shares.get(1).amount()).isEqualByComparingTo("33.34");
+        assertThat(shares.get(2).amount()).isEqualByComparingTo("33.33");
+        assertThat(shares.get(3).amount()).isEqualByComparingTo("33.33");
+    }
+
+    @Test
+    @DisplayName("Предельные сумма и веса не переполняют арифметику")
+    void handlesMaximumAmountAndWeights() {
+        // @Digits пропускает до 15 цифр в целой части: в копейках × вес это далеко за пределами long
+        BigDecimal amount = new BigDecimal("999999999999999.99");
+        List<SplitInput> participants = List.of(
+                new SplitInput(U1, new BigDecimal("999999999999999")),
+                new SplitInput(U2, new BigDecimal("1")));
+
+        List<ShareAmount> shares = strategy.split(amount, participants);
+
+        assertThat(sumOf(shares)).isEqualByComparingTo(amount);
+        // точная доля U2 — 0.99999…: база округляется вниз, копейку остатка по порядку userId получает U1
+        assertThat(shares.get(1).amount()).isEqualByComparingTo("0.99");
     }
 
     @Test
